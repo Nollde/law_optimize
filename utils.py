@@ -180,16 +180,21 @@ class Optimizer(AnalysisTask, law.LocalWorkflow):
         yield self.objective.req(self, **ask, branch=-1)
 
 
+@luigi.util.inherits(Optimizer)
 class OptimizerPreparation(AnalysisTask):
     """
     Task that prepares the optimizer and draws a todo list.
     """
 
-    n_initial_points = luigi.IntParameter(
+    n_initial = luigi.IntParameter(
         default=10,
         description="Number of random sampled values \
         before starting optimizations",
     )
+
+    @property
+    def n_initial_points(self):
+        return max(self.n_initial, self.n_parallel)
 
     def output(self):
         return {
