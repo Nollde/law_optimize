@@ -152,10 +152,13 @@ class Optimizer(AnalysisTask, law.LocalWorkflow):
     def todo(self):
         return self.local_target("todo_{}.json".format(self.branch))
 
+    def obj_req(self, ask):
+        return self.objective.req(self, **ask, branch=-1)
+
     def run(self):
         if self.todo.exists():
             ask = self.todo.load()
-            obj = yield self.objective.req(self, **ask, branch=-1)
+            obj = yield self.obj_req(ask)
             y = obj["collection"].targets[0][self.objective_key].load()
             with TargetLock(self.input()["opt"]) as opt:
                 opt.tell(list(ask.values()), y)
@@ -177,7 +180,7 @@ class Optimizer(AnalysisTask, law.LocalWorkflow):
                 print("by asking", end=": ")
             print(ask)
         self.todo.dump(ask, cls=NumpyEncoder)
-        yield self.objective.req(self, **ask, branch=-1)
+        yield self.obj_req(ask)
 
 
 @luigi.util.inherits(Optimizer)
