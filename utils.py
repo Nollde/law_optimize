@@ -12,7 +12,7 @@ from luigi import IntParameter, FloatParameter, ChoiceParameter
 from skopt.space import Real, Integer, Categorical
 
 from tasks.base import ConfigTask
-from utils.json import NumpyEncoder
+from utils.util import NumpyEncoder
 
 law.contrib.load("matplotlib")
 
