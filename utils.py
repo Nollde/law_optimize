@@ -10,9 +10,12 @@ import luigi
 import law
 from luigi import IntParameter, FloatParameter, ChoiceParameter
 from skopt.space import Real, Integer, Categorical
+from skopt.plots import plot_objective, plot_evaluations, plot_convergence
+import matplotlib.pyplot as plt
 
 from tasks.base import AnalysisTask
 from utils.util import NumpyEncoder
+
 
 law.contrib.load("matplotlib")
 
@@ -134,6 +137,7 @@ class Optimizer(AnalysisTask, law.LocalWorkflow):
     iterations = luigi.IntParameter(default=4, description="Number of iterations")
     n_parallel = luigi.IntParameter(default=2, description="Number of parallel evaluations")
     objective_key = luigi.Parameter("objective")
+    status_frequency = luigi.IntParameter(default=50, description="Frequency to give a status.")
 
     @property
     def objective(self):
@@ -146,7 +150,24 @@ class Optimizer(AnalysisTask, law.LocalWorkflow):
         return OptimizerPreparation.req(self)
 
     def output(self):
-        return self.local_target("optimizer.pkl")
+        return {
+            "opt": self.local_target("optimizer.pkl"),
+            "conv": self.local_target("convergence.pdf"),
+            "obj": self.local_target("objective.pdf"),
+        }
+
+    def plot_status(self, opt):
+
+        result = opt.run(None, 0)
+        output = self.output()
+
+        plot_convergence(result)
+        output["conv"].dump(plt.gcf(), bbox_inches="tight")
+
+        plot_objective(result)
+        output["obj"].dump(plt.gcf(), bbox_inches="tight")
+
+        plt.close()
 
     @property
     def todo(self):
@@ -167,8 +188,13 @@ class Optimizer(AnalysisTask, law.LocalWorkflow):
         with TargetLock(self.input()["opt"]) as opt, TargetLock(
             self.input()["todos"]
         ) as todos, TargetLock(self.input()["keys"]) as keys:
-            if len(opt.Xi) >= self.iterations:
-                self.output().dump(opt)
+            iteration = len(opt.Xi)
+            if iteration % self.status_frequency == 0:
+                self.plot_status(opt)
+            if iteration >= self.iterations:
+                self.output()["opt"].dump(opt)
+                self.output()["obj"].touch()
+                self.output()["conv"].touch()
                 return
             print("got new todo", end=", ")
             if len(todos) > 0:
@@ -269,10 +295,7 @@ class OptimizerPlot(AnalysisTask):
         return collection
 
     def run(self):
-        from skopt.plots import plot_objective, plot_evaluations, plot_convergence
-        import matplotlib.pyplot as plt
-
-        result = self.input()["collection"].targets[0].load().run(None, 0)
+        result = self.input()["collection"].targets[0]["opt"].load().run(None, 0)
         output = self.output()
 
         plot_convergence(result)
