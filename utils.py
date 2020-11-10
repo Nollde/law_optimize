@@ -11,7 +11,7 @@ import law
 from luigi import IntParameter, FloatParameter, ChoiceParameter
 from skopt.space import Real, Integer, Categorical
 
-from tasks.base import ConfigTask
+from tasks.base import AnalysisTask
 from utils.util import NumpyEncoder
 
 law.contrib.load("matplotlib")
@@ -126,7 +126,7 @@ class TargetLock(object):
         os.remove(self.lock)
 
 
-class Optimizer(ConfigTask, law.LocalWorkflow):
+class Optimizer(AnalysisTask, law.LocalWorkflow):
     """
     Workflow that runs optimization.
     """
@@ -184,7 +184,7 @@ class Optimizer(ConfigTask, law.LocalWorkflow):
 
 
 @luigi.util.inherits(Optimizer)
-class OptimizerPreparation(ConfigTask):
+class OptimizerPreparation(AnalysisTask):
     """
     Task that prepares the optimizer and draws a todo list.
     """
@@ -240,7 +240,7 @@ class OptimizerPreparation(ConfigTask):
 
 
 @luigi.util.inherits(Optimizer)
-class OptimizerPlot(ConfigTask):
+class OptimizerPlot(AnalysisTask):
     """
     Workflow that runs optimization and plots results.
     """
