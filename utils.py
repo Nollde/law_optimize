@@ -266,6 +266,35 @@ class OptimizerPreparation(AnalysisTask):
 
 
 @luigi.util.inherits(Optimizer)
+class OptimizerDraw(AnalysisTask):
+    """
+    Task that prepares the optimizer and draws a todo list.
+    """
+
+    n_draw = luigi.IntParameter(
+        default=10,
+        description="Number of samples \
+        drawn for restart of optimization.",
+    )
+
+    @property
+    def n_initial_points(self):
+        return max(self.n_initial, self.n_parallel)
+
+    def output(self):
+        return self.local_target("todos.json")
+
+    def run(self):
+        import skopt
+
+        opt = self.input()["opt"].load()
+        todos = opt.ask(self.n_draw)
+        with TargetLock(self.input()["keys"]) as keys:
+            todos = [dict(zip(keys, todo)) for todo in todos]
+        self.output().dump(todos, cls=NumpyEncoder)
+
+
+@luigi.util.inherits(Optimizer)
 class OptimizerPlot(AnalysisTask):
     """
     Workflow that runs optimization and plots results.
