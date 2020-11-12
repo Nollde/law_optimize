@@ -129,7 +129,14 @@ class TargetLock(object):
         os.remove(self.lock)
 
 
-class Optimizer(AnalysisTask, law.LocalWorkflow):
+class Opt:
+    opt_version = IntParameter(default=0, description="Version number of the optimizer run")
+
+    def store_parts(self):
+        return super().store_parts() + (f"opt_version_{self.opt_version}",)
+
+
+class Optimizer(Opt, AnalysisTask, law.LocalWorkflow):
     """
     Workflow that runs optimization.
     """
@@ -210,7 +217,7 @@ class Optimizer(AnalysisTask, law.LocalWorkflow):
 
 
 @luigi.util.inherits(Optimizer)
-class OptimizerPreparation(AnalysisTask):
+class OptimizerPreparation(Opt, AnalysisTask):
     """
     Task that prepares the optimizer and draws a todo list.
     """
@@ -266,7 +273,7 @@ class OptimizerPreparation(AnalysisTask):
 
 
 @luigi.util.inherits(Optimizer)
-class OptimizerDraw(AnalysisTask):
+class OptimizerDraw(Opt, AnalysisTask):
     """
     Task that prepares the optimizer and draws a todo list.
     """
@@ -295,7 +302,7 @@ class OptimizerDraw(AnalysisTask):
 
 
 @luigi.util.inherits(Optimizer)
-class OptimizerPlot(AnalysisTask):
+class OptimizerPlot(Opt, AnalysisTask):
     """
     Workflow that runs optimization and plots results.
     """
