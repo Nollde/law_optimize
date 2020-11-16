@@ -196,7 +196,7 @@ class Optimizer(Opt, AnalysisTask, law.LocalWorkflow):
             self.input()["todos"]
         ) as todos, TargetLock(self.input()["keys"]) as keys:
             iteration = len(opt.Xi)
-            if iteration % self.status_frequency == 0:
+            if iteration and iteration % self.status_frequency == 0:
                 self.plot_status(opt)
             if iteration >= self.iterations:
                 self.output()["opt"].dump(opt)
