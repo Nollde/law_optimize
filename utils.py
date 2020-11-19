@@ -117,7 +117,7 @@ class TargetLock(object):
 
     def __enter__(self):
         while True:
-            sleep(1 + random.random())
+            sleep(5 + 10 * random.random())
             if not Path(self.lock).is_file():
                 Path(self.lock).touch()
                 self.loaded = self.target.load()
