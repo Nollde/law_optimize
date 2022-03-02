@@ -214,6 +214,12 @@ class Optimizer(Opt, AnalysisTask, law.LocalWorkflow):
         self.todo.dump(ask, cls=NumpyEncoder)
         yield self.obj_req(ask)
 
+    def get_best(self):
+        br = self.as_branch(0)
+        return self.obj_req(
+            dict(zip(br.input()["keys"].load(), br.output()["opt"].load().get_result().x))
+        )
+
 
 @luigi.util.inherits(Optimizer)
 class OptimizerPreparation(Opt, AnalysisTask):
