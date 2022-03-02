@@ -6,6 +6,7 @@ from collections import OrderedDict, defaultdict
 from time import sleep
 import random
 
+from filelock import FileLock
 import luigi
 import law
 from luigi import IntParameter, FloatParameter, ChoiceParameter
@@ -113,20 +114,18 @@ class TargetLock(object):
     def __init__(self, target):
         self.target = target
         self.path = target.path
-        self.lock = self.path + ".lock"
+        self.lock = FileLock(self.path + ".lock")
 
     def __enter__(self):
-        while True:
-            sleep(5 + 10 * random.random())
-            if not Path(self.lock).is_file():
-                Path(self.lock).touch()
-                self.loaded = self.target.load()
-                break
+        self.lock.acquire()
+        # print(f"{self.__class__.__name__}[{os.getpid()}]: acquired {self.path}")
+        self.loaded = self.target.load()
         return self.loaded
 
     def __exit__(self, type, value, traceback):
         self.target.dump(self.loaded)
-        os.remove(self.lock)
+        # print(f"{self.__class__.__name__}[{os.getpid()}]: releasing {self.path}")
+        self.lock.release()
 
 
 class Opt:
