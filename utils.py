@@ -1,12 +1,10 @@
 # -*- coding: utf-8 -*-
-
-import os
-from pathlib import Path
 from collections import OrderedDict, defaultdict
 from time import sleep
-import random
+import json
 
 from filelock import FileLock
+import numpy as np
 import luigi
 import law
 from luigi import IntParameter, FloatParameter, ChoiceParameter
@@ -14,11 +12,33 @@ from skopt.space import Real, Integer, Categorical
 from skopt.plots import plot_objective, plot_evaluations, plot_convergence
 import matplotlib.pyplot as plt
 
-from tasks.base import AnalysisTask
-from utils.util import NumpyEncoder
-
 
 law.contrib.load("matplotlib")
+
+
+class NumpyEncoder(json.JSONEncoder):
+    """Custom encoder for numpy data types"""
+
+    def default(self, obj):
+        if isinstance(obj, np.integer):
+            return int(obj)
+
+        elif isinstance(obj, np.floating):
+            return float(obj)
+
+        elif isinstance(obj, (complex, np.complexfloating)):
+            return {"real": obj.real, "imag": obj.imag}
+
+        elif isinstance(obj, (np.ndarray,)):
+            return obj.tolist()
+
+        elif isinstance(obj, (np.bool_)):
+            return bool(obj)
+
+        elif isinstance(obj, (np.void)):
+            return None
+
+        return json.JSONEncoder.default(self, obj)
 
 
 class SkoptLuigiParameter(object):
@@ -129,21 +149,27 @@ class TargetLock(object):
 
 
 class Opt:
-    opt_version = IntParameter(default=0, description="Version number of the optimizer run")
+    opt_version = IntParameter(
+        default=0, description="Version number of the optimizer run"
+    )
 
     def store_parts(self):
         return super().store_parts() + (f"opt_version_{self.opt_version}",)
 
 
-class Optimizer(Opt, AnalysisTask, law.LocalWorkflow):
+class Optimizer(Opt, law.LocalWorkflow):
     """
     Workflow that runs optimization.
     """
 
     iterations = luigi.IntParameter(default=4, description="Number of iterations")
-    n_parallel = luigi.IntParameter(default=2, description="Number of parallel evaluations")
+    n_parallel = luigi.IntParameter(
+        default=2, description="Number of parallel evaluations"
+    )
     objective_key = luigi.Parameter("objective")
-    status_frequency = luigi.IntParameter(default=50, description="Frequency to give a status.")
+    status_frequency = luigi.IntParameter(
+        default=50, description="Frequency to give a status."
+    )
 
     @property
     def objective(self):
@@ -217,12 +243,14 @@ class Optimizer(Opt, AnalysisTask, law.LocalWorkflow):
     def get_best(self):
         br = self.as_branch(0)
         return self.obj_req(
-            dict(zip(br.input()["keys"].load(), br.output()["opt"].load().get_result().x))
+            dict(
+                zip(br.input()["keys"].load(), br.output()["opt"].load().get_result().x)
+            )
         )
 
 
 @luigi.util.inherits(Optimizer)
-class OptimizerPreparation(Opt, AnalysisTask):
+class OptimizerPreparation(Opt):
     """
     Task that prepares the optimizer and draws a todo list.
     """
@@ -278,7 +306,7 @@ class OptimizerPreparation(Opt, AnalysisTask):
 
 
 @luigi.util.inherits(Optimizer)
-class OptimizerDraw(Opt, AnalysisTask):
+class OptimizerDraw(Opt):
     """
     Task that prepares the optimizer and draws a todo list.
     """
@@ -307,7 +335,7 @@ class OptimizerDraw(Opt, AnalysisTask):
 
 
 @luigi.util.inherits(Optimizer)
-class OptimizerPlot(Opt, AnalysisTask):
+class OptimizerPlot(Opt):
     """
     Workflow that runs optimization and plots results.
     """
