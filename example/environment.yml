@@ -1,0 +1,11 @@
+name: luigi_optimize
+channels:
+  - conda-forge
+  - defaults
+dependencies:
+  - python=3.9
+  - law
+  - scikit-optimize
+  - filelock
+  - numpy
+  - ipython
