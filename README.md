@@ -1,6 +1,15 @@
 # Law Optimize
 Law Optimize helps to optimize parameterizable law tasks.
 
+## Principle
+The optimization is based on a Bayesian Optimization Strategy utilizing a Gaussian Process Estimator.
+At first, the Optimizer Preparation task will suggestion `n_initial` points to test.
+After these points are tested and feed back is provided to the optimizer instance, the optimizer will have a state.
+Now for each optimization step, the optimizer is asked for which new points to test next.
+These points are tested by `n_parallel` parallel instances of the `Optimizer` task (so called "Optimization Streams").
+Every time an `Optimizer` task finishes, it provides its outcome to the instance, new points are queried, and the process goes on.
+The optimization proceeds until `n_iterations` points have been evaluated.
+
 ## Example
 Setup the law environment
 ```

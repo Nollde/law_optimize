@@ -12,7 +12,8 @@ class BaseTask(law.Task):
     Base task which provides some convenience methods to create local file
     and directory targets at the default data path.
     """
-    version = law.Parameter() 
+
+    version = law.Parameter()
 
     def store_parts(self):
         task_name = self.__class__.__name__
@@ -58,10 +59,8 @@ class OptimizerPreparation(lopt.OptimizerPreparation, BaseTask):
 
 class Optimizer(lopt.Optimizer, BaseTask):
     objective = Evaluation
+    optimizer_preparation = OptimizerPreparation
 
-    def requires(self):
-        return OptimizerPreparation.req(self)
 
 class OptimizerPlot(lopt.OptimizerPlot, BaseTask):
-    def requires(self):
-        return Optimizer.req(self)
+    optimizer = Optimizer

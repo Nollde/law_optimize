@@ -151,36 +151,99 @@ class TargetLock(object):
 
 class Opt:
     opt_version = IntParameter(
-        default=0, description="Version number of the optimizer run"
+        default=0,
+        description="Version number of the optimizer run",
     )
-
-    iterations = luigi.IntParameter(default=4, description="Number of iterations")
-    # n_parallel = luigi.IntParameter(
-    #     default=2, description="Number of parallel evaluations"
-    # )
+    iterations = luigi.IntParameter(
+        default=4,
+        description="Number of iterations",
+    )
+    n_parallel = luigi.IntParameter(
+        default=2,
+        description="Number of parallel optimization streams",
+    )
     objective_key = luigi.Parameter("objective")
     status_frequency = luigi.IntParameter(
-        default=50, description="Frequency to give a status."
+        default=50,
+        description="Frequency to give a status.",
     )
 
     def store_parts(self):
         return super().store_parts() + (f"opt_version_{self.opt_version}",)
 
 
-class Optimizer(Opt): #, law.LocalWorkflow):
+class OptimizerPreparation(Opt):
     """
-    Workflow that runs optimization.
+    Task that prepares the optimizer and draws a todo list.
     """
+
+    n_initial = luigi.IntParameter(
+        default=10,
+        description="Number of random sampled values \
+        before starting optimizations",
+    )
+
+    @property
+    def n_initial_points(self):
+        return max(self.n_initial, self.n_parallel)
+
+    def output(self):
+        return {
+            "opt": self.local_target("optimizer.pkl"),
+            "todos": self.local_target("todos.json"),
+            "keys": self.local_target("keys.json"),
+        }
 
     @property
     def objective(self):
         raise NotImplementedError
 
-    # def create_branch_map(self):
-    #     return list(range(self.n_parallel))
+    def optimizable_parameters(self):
+        params = self.objective.get_params()
+        opt_params = OrderedDict()
+        for name, param in params:
+            if isinstance(param, SkoptLuigiParameter):
+                if param.optimizable:
+                    opt_params[name] = param
+        return opt_params
+
+    def run(self):
+        import skopt
+
+        opt_params = self.optimizable_parameters()
+        optimizer = skopt.Optimizer(
+            dimensions=list(opt_params.values()),
+            random_state=1,
+            n_initial_points=self.n_initial_points,
+        )
+        x = [optimizer.ask() for i in range(self.n_initial_points)]
+        ask = [dict(zip(opt_params.keys(), val)) for val in x]
+
+        with self.output()["opt"].localize("w") as tmp:
+            tmp.dump(optimizer)
+        with self.output()["todos"].localize("w") as tmp:
+            tmp.dump(ask, cls=NumpyEncoder)
+        with self.output()["keys"].localize("w") as tmp:
+            tmp.dump(list(opt_params.keys()))
+
+
+class Optimizer(Opt):
+    """
+    Workflow that runs optimization.
+    """
+
+    ind = luigi.IntParameter(0, description="Index of the optimization stream")
+
+    @property
+    def objective(self):
+        raise NotImplementedError
+
+    @property
+    def optimizer_preparation(self):
+        raise NotImplementedError
 
     def requires(self):
-        return OptimizerPreparation.req(self)
+        return self.optimizer_preparation.req(self)
 
     def output(self):
         return {
@@ -204,11 +267,10 @@ class Optimizer(Opt): #, law.LocalWorkflow):
 
     @property
     def todo(self):
-        return self.local_target("todos.json")
-        # return self.local_target("todo_{}.json".format(self.branch))
+        return self.local_target(f"todos_{self.ind}.json")
 
     def obj_req(self, ask):
-        return self.objective.req(self, **ask) # , branch=-1)
+        return self.objective.req(self, **ask)
 
     def run(self):
         if self.todo.exists():
@@ -251,91 +313,6 @@ class Optimizer(Opt): #, law.LocalWorkflow):
         )
 
 
-class OptimizerPreparation(Opt):
-    """
-    Task that prepares the optimizer and draws a todo list.
-    """
-
-    n_initial = luigi.IntParameter(
-        default=10,
-        description="Number of random sampled values \
-        before starting optimizations",
-    )
-
-    # @property
-    # def n_initial_points(self):
-    #     return max(self.n_initial, self.n_parallel)
-
-    def output(self):
-        return {
-            "opt": self.local_target("optimizer.pkl"),
-            "todos": self.local_target("todos.json"),
-            "keys": self.local_target("keys.json"),
-        }
-
-    @property
-    def objective(self):
-        raise NotImplementedError
-
-    def optimizable_parameters(self):
-        params = self.objective.get_params()
-        opt_params = OrderedDict()
-        for name, param in params:
-            if isinstance(param, SkoptLuigiParameter):
-                if param.optimizable:
-                    opt_params[name] = param
-        return opt_params
-
-    def run(self):
-        import skopt
-
-        opt_params = self.optimizable_parameters()
-        optimizer = skopt.Optimizer(
-            dimensions=list(opt_params.values()),
-            random_state=1,
-            n_initial_points=self.n_initial,
-            # n_initial_points=self.n_initial_points,
-        )
-        x = [optimizer.ask() for i in range(self.n_initial)]
-        # x = [optimizer.ask() for i in range(self.n_initial_points)]
-        ask = [dict(zip(opt_params.keys(), val)) for val in x]
-
-        with self.output()["opt"].localize("w") as tmp:
-            tmp.dump(optimizer)
-        with self.output()["todos"].localize("w") as tmp:
-            tmp.dump(ask, cls=NumpyEncoder)
-        with self.output()["keys"].localize("w") as tmp:
-            tmp.dump(list(opt_params.keys()))
-
-
-class OptimizerDraw(Opt):
-    """
-    Task that prepares the optimizer and draws a todo list.
-    """
-
-    n_draw = luigi.IntParameter(
-        default=10,
-        description="Number of samples \
-        drawn for restart of optimization.",
-    )
-
-    @property
-    def n_initial_points(self):
-        return max(self.n_initial, self.n_parallel)
-
-    def output(self):
-        return self.local_target("todos.json")
-
-    def run(self):
-        import skopt
-
-        opt = self.input()["opt"].load()
-        todos = opt.ask(self.n_draw)
-        with TargetLock(self.input()["keys"]) as keys:
-            todos = [dict(zip(keys, todo)) for todo in todos]
-        self.output().dump(todos, cls=NumpyEncoder)
-
-
 class OptimizerPlot(Opt):
     """
     Workflow that runs optimization and plots results.
@@ -347,9 +324,12 @@ class OptimizerPlot(Opt):
         Can be expensive to evaluate for high dimensional input",
     )
 
+    @property
+    def optimizer(self):
+        raise NotImplementedError
+
     def requires(self):
-        return Optimizer.req(self)
-        # return Optimizer.req(self, branch=-1)
+        return [self.optimizer.req(self, ind=ind) for ind in range(self.n_parallel)]
 
     def output(self):
         collection = {
@@ -363,8 +343,7 @@ class OptimizerPlot(Opt):
         return collection
 
     def run(self):
-        result = self.input()["opt"].load().run(None, 0)
-        # result = self.input()["collection"].targets[0]["opt"].load().run(None, 0)
+        result = self.input()[0]["opt"].load().run(None, 0)
         output = self.output()
 
         plot_convergence(result)
