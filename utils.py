@@ -8,6 +8,7 @@ import numpy as np
 import luigi
 import law
 from luigi import IntParameter, FloatParameter, ChoiceParameter
+
 from skopt.space import Real, Integer, Categorical
 from skopt.plots import plot_objective, plot_evaluations, plot_convergence
 import matplotlib.pyplot as plt
@@ -153,30 +154,30 @@ class Opt:
         default=0, description="Version number of the optimizer run"
     )
 
-    def store_parts(self):
-        return super().store_parts() + (f"opt_version_{self.opt_version}",)
-
-
-class Optimizer(Opt, law.LocalWorkflow):
-    """
-    Workflow that runs optimization.
-    """
-
     iterations = luigi.IntParameter(default=4, description="Number of iterations")
-    n_parallel = luigi.IntParameter(
-        default=2, description="Number of parallel evaluations"
-    )
+    # n_parallel = luigi.IntParameter(
+    #     default=2, description="Number of parallel evaluations"
+    # )
     objective_key = luigi.Parameter("objective")
     status_frequency = luigi.IntParameter(
         default=50, description="Frequency to give a status."
     )
 
+    def store_parts(self):
+        return super().store_parts() + (f"opt_version_{self.opt_version}",)
+
+
+class Optimizer(Opt): #, law.LocalWorkflow):
+    """
+    Workflow that runs optimization.
+    """
+
     @property
     def objective(self):
         raise NotImplementedError
 
-    def create_branch_map(self):
-        return list(range(self.n_parallel))
+    # def create_branch_map(self):
+    #     return list(range(self.n_parallel))
 
     def requires(self):
         return OptimizerPreparation.req(self)
@@ -203,16 +204,17 @@ class Optimizer(Opt, law.LocalWorkflow):
 
     @property
     def todo(self):
-        return self.local_target("todo_{}.json".format(self.branch))
+        return self.local_target("todos.json")
+        # return self.local_target("todo_{}.json".format(self.branch))
 
     def obj_req(self, ask):
-        return self.objective.req(self, **ask, branch=-1)
+        return self.objective.req(self, **ask) # , branch=-1)
 
     def run(self):
         if self.todo.exists():
             ask = self.todo.load()
             obj = yield self.obj_req(ask)
-            y = obj["collection"].targets[0][self.objective_key].load()
+            y = obj[self.objective_key].load()
             with TargetLock(self.input()["opt"]) as opt:
                 opt.tell(list(ask.values()), y)
                 self.todo.remove()
@@ -249,7 +251,6 @@ class Optimizer(Opt, law.LocalWorkflow):
         )
 
 
-@luigi.util.inherits(Optimizer)
 class OptimizerPreparation(Opt):
     """
     Task that prepares the optimizer and draws a todo list.
@@ -261,9 +262,9 @@ class OptimizerPreparation(Opt):
         before starting optimizations",
     )
 
-    @property
-    def n_initial_points(self):
-        return max(self.n_initial, self.n_parallel)
+    # @property
+    # def n_initial_points(self):
+    #     return max(self.n_initial, self.n_parallel)
 
     def output(self):
         return {
@@ -292,9 +293,11 @@ class OptimizerPreparation(Opt):
         optimizer = skopt.Optimizer(
             dimensions=list(opt_params.values()),
             random_state=1,
-            n_initial_points=self.n_initial_points,
+            n_initial_points=self.n_initial,
+            # n_initial_points=self.n_initial_points,
         )
-        x = [optimizer.ask() for i in range(self.n_initial_points)]
+        x = [optimizer.ask() for i in range(self.n_initial)]
+        # x = [optimizer.ask() for i in range(self.n_initial_points)]
         ask = [dict(zip(opt_params.keys(), val)) for val in x]
 
         with self.output()["opt"].localize("w") as tmp:
@@ -305,7 +308,6 @@ class OptimizerPreparation(Opt):
             tmp.dump(list(opt_params.keys()))
 
 
-@luigi.util.inherits(Optimizer)
 class OptimizerDraw(Opt):
     """
     Task that prepares the optimizer and draws a todo list.
@@ -334,14 +336,10 @@ class OptimizerDraw(Opt):
         self.output().dump(todos, cls=NumpyEncoder)
 
 
-@luigi.util.inherits(Optimizer)
 class OptimizerPlot(Opt):
     """
     Workflow that runs optimization and plots results.
     """
-
-    def create_branch_map(self):
-        return list(range(self.n_parallel))
 
     plot_objective = luigi.BoolParameter(
         default=True,
@@ -350,7 +348,8 @@ class OptimizerPlot(Opt):
     )
 
     def requires(self):
-        return Optimizer.req(self, branch=-1)
+        return Optimizer.req(self)
+        # return Optimizer.req(self, branch=-1)
 
     def output(self):
         collection = {
@@ -364,7 +363,8 @@ class OptimizerPlot(Opt):
         return collection
 
     def run(self):
-        result = self.input()["collection"].targets[0]["opt"].load().run(None, 0)
+        result = self.input()["opt"].load().run(None, 0)
+        # result = self.input()["collection"].targets[0]["opt"].load().run(None, 0)
         output = self.output()
 
         plot_convergence(result)
