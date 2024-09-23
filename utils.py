@@ -83,7 +83,7 @@ class SIntParameter(Integer, IntParameter, SkoptLuigiParameter):
     )
     """
 
-    skopt_keys = ["transform", "name"]
+    skopt_keys = ["prior", "transform", "name"]
 
     def __init__(self, *args, **kwargs):
         luigi_kwargs, skopt_kwargs = self.divide_kwargs(kwargs)
