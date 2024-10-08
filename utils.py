@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+import logging
 from collections import OrderedDict, defaultdict
 from time import sleep
 import json
@@ -13,7 +14,7 @@ from skopt.space import Real, Integer, Categorical
 from skopt.plots import plot_objective, plot_evaluations, plot_convergence
 import matplotlib.pyplot as plt
 
-
+logger = logging.getLogger(__name__)
 law.contrib.load("matplotlib")
 
 
@@ -139,13 +140,13 @@ class TargetLock(object):
 
     def __enter__(self):
         self.lock.acquire()
-        # print(f"{self.__class__.__name__}[{os.getpid()}]: acquired {self.path}")
+        # logger.info(f"{self.__class__.__name__}[{os.getpid()}]: acquired {self.path}")
         self.loaded = self.target.load()
         return self.loaded
 
     def __exit__(self, type, value, traceback):
         self.target.dump(self.loaded)
-        # print(f"{self.__class__.__name__}[{os.getpid()}]: releasing {self.path}")
+        # logger.info(f"{self.__class__.__name__}[{os.getpid()}]: releasing {self.path}")
         self.lock.release()
 
 
@@ -292,15 +293,15 @@ class Optimizer(Opt):
                 self.output()["obj"].touch()
                 self.output()["conv"].touch()
                 return
-            print("got new todo", end=", ")
+            logger.info("got new todo", end=", ")
             if len(todos) > 0:
                 ask = todos.pop(0)
-                print("from todos", end=": ")
+                logger.info("from todos", end=": ")
             else:
                 x = opt.ask()
                 ask = dict(zip(keys, x))
-                print("by asking", end=": ")
-            print(ask)
+                logger.info("by asking", end=": ")
+            logger.info(ask)
         self.todo.dump(ask, cls=NumpyEncoder)
         yield self.obj_req(ask)
 
